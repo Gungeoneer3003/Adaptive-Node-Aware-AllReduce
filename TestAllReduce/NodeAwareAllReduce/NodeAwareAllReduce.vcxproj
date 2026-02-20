@@ -130,6 +130,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="AlgA.cpp" />
     <ClCompile Include="testMPI.cpp" />
   </ItemGroup>
   <ItemGroup>
