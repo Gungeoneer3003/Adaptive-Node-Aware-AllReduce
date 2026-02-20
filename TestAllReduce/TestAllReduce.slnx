@@ -3,5 +3,5 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Project Path="NodeAwareAllReduce/NodeAwareAllReduce.vcxproj" />
+  <Project Path="NodeAwareAllReduce/NodeAwareAllReduce.vcxproj" Id="f37a772d-4f79-42ae-a8e1-115f8ad402dd" />
 </Solution>
