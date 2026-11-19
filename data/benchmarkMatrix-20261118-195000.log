@@ -1,0 +1,60 @@
+Benchmark matrix started: 2026-11-18T19:50:00-08:00
+Configuration file: /home/beowulf/Projects/cluster/Adaptive-Node-Aware-AllReduce/benchmarkMatrix.conf
+
+== Starting 2x4 at 2026-11-18T19:50:00-08:00 ==
+nodes=2 ranksPerNode=4 nodeList=random compute nodes
+Submitted job 600 for 2 nodes and 4 ranks per node
+Node selection: random compute nodes
+Requested nodes: node10,node08
+Staged executable for job 600
+Batch host: node08
+Monitor: squeue -j 600
+Output: /tmp/nxm-allreduce-600.out on node08
+Waiting for job 600 to complete
+Collected and validated 15000 rows
+CSV: /home/beowulf/Projects/cluster/Adaptive-Node-Aware-AllReduce/data/nodes2ranks4Allreduce-600.csv
+== Completed 2x4 at 2026-11-18T19:51:13-08:00 ==
+
+== Starting 4x4 at 2026-11-18T19:51:13-08:00 ==
+nodes=4 ranksPerNode=4 nodeList=random compute nodes
+Submitted job 601 for 4 nodes and 4 ranks per node
+Node selection: random compute nodes
+Requested nodes: node10,node02,node01,node03
+Staged executable for job 601
+Batch host: node01
+Monitor: squeue -j 601
+Output: /tmp/nxm-allreduce-601.out on node01
+Waiting for job 601 to complete
+Collected and validated 15000 rows
+CSV: /home/beowulf/Projects/cluster/Adaptive-Node-Aware-AllReduce/data/nodes4ranks4Allreduce-601.csv
+== Completed 4x4 at 2026-11-18T19:52:51-08:00 ==
+
+== Starting 8x4 at 2026-11-18T19:52:51-08:00 ==
+nodes=8 ranksPerNode=4 nodeList=random compute nodes
+Submitted job 602 for 8 nodes and 4 ranks per node
+Node selection: random compute nodes
+Requested nodes: node00,node06,node07,node05,node01,node12,node08,node04
+Staged executable for job 602
+Batch host: node00
+Monitor: squeue -j 602
+Output: /tmp/nxm-allreduce-602.out on node00
+Waiting for job 602 to complete
+Collected and validated 15000 rows
+CSV: /home/beowulf/Projects/cluster/Adaptive-Node-Aware-AllReduce/data/nodes8ranks4Allreduce-602.csv
+== Completed 8x4 at 2026-11-18T19:56:25-08:00 ==
+
+== Starting 16x4 at 2026-11-18T19:56:25-08:00 ==
+nodes=16 ranksPerNode=4 nodeList=all cluster nodes
+Submitted job 603 for 16 nodes and 4 ranks per node
+Node selection: all nodes
+Requested nodes: head,node[00-14]
+Staged executable for job 603
+Batch host: head
+Monitor: squeue -j 603
+Output: /tmp/nxm-allreduce-603.out on head
+Waiting for job 603 to complete
+Collected and validated 15000 rows
+CSV: /home/beowulf/Projects/cluster/Adaptive-Node-Aware-AllReduce/data/nodes16ranks4Allreduce-603.csv
+== Completed 16x4 at 2026-11-18T20:00:18-08:00 ==
+
+Benchmark matrix completed: 2026-11-18T20:00:18-08:00
