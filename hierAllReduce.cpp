@@ -1,164 +1,379 @@
+// Original File
+// This is what we started with and gave the preliminary data 
+#include <algorithm>
+#include <cstdio>
 #include <mpi.h>
-#include <iostream>
-
+#include <vector>
 using namespace std;
 
 /*
-    struct Comms
-        nodeComm: all ranks on curr node
-        leaderComm: one rank per node
+    Communicators used by the hierarchical implementation
+    node_comm groups ranks sharing one compute node
+    leader_comm contains one rank from each compute node
 */
 struct Comms {
-    MPI_Comm nodeComm   = MPI_COMM_NULL;
-    MPI_Comm leaderComm = MPI_COMM_NULL;
+    MPI_Comm node_comm = MPI_COMM_NULL;
+    MPI_Comm leader_comm = MPI_COMM_NULL;
 };
 
+/* Context shared by both benchmarked collective implementations */
+struct BenchmarkContext {
+    MPI_Comm world = MPI_COMM_NULL;
+    MPI_Comm node_comm = MPI_COMM_NULL;
+    MPI_Comm leader_comm = MPI_COMM_NULL;
+};
 
-/*
-    int buildComms
-        builds 2 communicators once when code is run
-*/
-static int buildComms(MPI_Comm world, Comms* c) {
-    int rc = MPI_Comm_split_type(
+/* Describes one payload size and its number of timed repetitions */
+struct BenchmarkCase {
+    const char* label;
+    int elementCount;
+    int timed_iterations;
+};
+
+/* Stores the maximum per-rank average and the result validation status */
+struct Measurement {
+    double average_microseconds;
+    bool is_correct;
+};
+
+using AllReduceOperation = int (*)(
+    const int* sendBuffer,
+    int* receiveBuffer,
+    int elementCount,
+    const BenchmarkContext& context
+);
+
+// Globals 
+constexpr int kWarmupIterations = 5;
+constexpr int kBenchmarkRuns = 100;
+constexpr int kScalarElements = 1;
+constexpr int kKilobyteElements = 1024;
+constexpr int kMediumElements = 64 * 1024;
+constexpr int kLargeElements = 1024 * 1024;
+constexpr int kScalarIterations = 10000;
+constexpr int kKilobyteIterations = 1000;
+constexpr int kMediumIterations = 100;
+constexpr int kLargeIterations = 10;
+constexpr double kMicrosecondsPerSecond = 1000000.0;
+
+constexpr BenchmarkCase kBenchmarkCases[] = {
+    {"1 int", kScalarElements, kScalarIterations},
+    {"1 Ki ints", kKilobyteElements, kKilobyteIterations},
+    {"64 Ki ints", kMediumElements, kMediumIterations},
+    {"1 Mi ints", kLargeElements, kLargeIterations},
+};
+
+/* Builds communicators for ranks on the same node and node leaders */
+static int build_comms(MPI_Comm world, Comms* comms) {
+    int return_code = MPI_Comm_split_type(
         world,
         MPI_COMM_TYPE_SHARED,
         0,
         MPI_INFO_NULL,
-        &c->nodeComm
-    ); // group ranks
+        &comms->node_comm
+    );
+
+    if (return_code != MPI_SUCCESS) {
+        return return_code;
+    }
 
     int world_rank = -1;
     int node_rank = -1;
-
     MPI_Comm_rank(world, &world_rank);
+    MPI_Comm_rank(comms->node_comm, &node_rank);
 
-    // decide leader
-    MPI_Comm_rank(c->nodeComm, &node_rank);
-
-    // leaders: node_rank == 0
-    int color;
-
-    if (node_rank == 0) {
-        color = 0; // leader
-    }
-    else {
-        color  = MPI_UNDEFINED; // not leader
-    }
-
-    rc = MPI_Comm_split(
+    const int color = node_rank == 0 ? 0 : MPI_UNDEFINED;
+    return MPI_Comm_split(
         world,
         color,
         world_rank,
-        &c->leaderComm
-    ); // create leader
-    // if color = 0 : leader
-    // else MPI_COMM_NULL and no leader communication
-    return rc;
+        &comms->leader_comm
+    );
 }
 
-/*
-    void freeComms
-        clean up communicators
-        avoids memory leaks
-*/
-static void freeComms(Comms* c) {
-    if (!c) return;
-    if (c->leaderComm != MPI_COMM_NULL) MPI_Comm_free(&c->leaderComm);
-    if (c->nodeComm   != MPI_COMM_NULL) MPI_Comm_free(&c->nodeComm);
-    c->leaderComm = MPI_COMM_NULL;
-    c->nodeComm   = MPI_COMM_NULL;
-}
-
-// hAllReduce(), algo B
-static int hAllReduce(
-    const void* sendbuf,
-    void* recvbuf,
-    int count,
-    MPI_Datatype datatype,
-    MPI_Op op,
-    MPI_Comm world,
-    MPI_Comm nodeComm,
-    MPI_Comm leaderComm
-) {
-
-    int node_rank = -1;
-    MPI_Comm_rank(nodeComm, &node_rank);
-
-    // MPI_IN_PLACE handling, need this for MPI_reduce/MPI_allreduce to work
-    const void* effectiveSend = sendbuf;
-    if (sendbuf == MPI_IN_PLACE) {
-        effectiveSend = recvbuf;
+/* Frees communicators created for the hierarchical implementation */
+static void free_comms(Comms* comms) {
+    if (comms == nullptr) {
+        return;
     }
 
-    // phase 1: intra-node reduce to node leader
-    int rc = MPI_Reduce(
-        effectiveSend,
-        recvbuf,     // meaningful at node leader
-        count,
-        datatype,
-        op,
+    if (comms->leader_comm != MPI_COMM_NULL) {
+        MPI_Comm_free(&comms->leader_comm);
+    }
+
+    if (comms->node_comm != MPI_COMM_NULL) {
+        MPI_Comm_free(&comms->node_comm);
+    }
+
+    comms->leader_comm = MPI_COMM_NULL;
+    comms->node_comm = MPI_COMM_NULL;
+}
+
+/* Runs the node-aware reduce, leader all-reduce, and local broadcast */
+static int hierarchical_all_reduce(
+    const int* sendBuffer,
+    int* receiveBuffer,
+    int elementCount,
+    const BenchmarkContext& context
+) {
+    int node_rank = -1;
+    MPI_Comm_rank(context.node_comm, &node_rank);
+
+    int return_code = MPI_Reduce(
+        sendBuffer
+,
+        receiveBuffer,
+        elementCount,
+        MPI_INT,
+        MPI_SUM,
         0,
-        nodeComm
+        context.node_comm
     );
 
-    // phase 2: inter-node allreduce for leaders
+    if (return_code != MPI_SUCCESS) {
+        return return_code;
+    }
+
     if (node_rank == 0) {
-        // leaderComm is valid only for leaders, others have MPI_COMM_NULL
-        rc = MPI_Allreduce(
+        return_code = MPI_Allreduce(
             MPI_IN_PLACE,
-            recvbuf,
-            count,
-            datatype,
-            op,
-            leaderComm
+            receiveBuffer,
+            elementCount,
+            MPI_INT,
+            MPI_SUM,
+            context.leader_comm
         );
     }
 
-    // phase 3: broadcast result within node
-    rc = MPI_Bcast(
-        recvbuf,
-        count,
-        datatype,
+    if (return_code != MPI_SUCCESS) {
+        return return_code;
+    }
+
+    return MPI_Bcast(
+        receiveBuffer,
+        elementCount,
+        MPI_INT,
         0,
-        nodeComm
+        context.node_comm
     );
-    return rc;
+}
+
+/* Runs OpenMPI's built-in all-reduce for the same integer sum operation */
+static int mpi_all_reduce(
+    const int* sendBuffer,
+    int* receiveBuffer,
+    int elementCount,
+    const BenchmarkContext& context
+) {
+    return MPI_Allreduce(
+        sendBuffer
+,
+        receiveBuffer,
+        elementCount,
+        MPI_INT,
+        MPI_SUM,
+        context.world
+    );
+}
+
+/* Checks that every output element contains the expected global sum */
+static bool has_expected_result(
+    const vector<int>& receiveBuffer,
+    int expected_sum
+) {
+    return all_of(
+        receiveBuffer.begin(),
+        receiveBuffer.end(),
+        [expected_sum](int value) { return value == expected_sum; }
+    );
+}
+
+/* Measures one collective and validates its final result outside timing */
+static Measurement measure_operation(
+    AllReduceOperation operation,
+    const BenchmarkCase& benchmark_case,
+    const BenchmarkContext& context,
+    int rank_value,
+    int expected_sum
+) {
+    vector<int> sendBuffer(
+        benchmark_case.elementCount,
+        rank_value
+    );
+    vector<int> receiveBuffer(benchmark_case.elementCount, 0);
+
+    for (int iteration = 0; iteration < kWarmupIterations; ++iteration) {
+        operation(
+            sendBuffer
+    .data(),
+            receiveBuffer.data(),
+            benchmark_case.elementCount,
+            context
+        );
+    }
+
+    MPI_Barrier(context.world);
+    const double start_time = MPI_Wtime();
+
+    for (int iteration = 0;
+         iteration < benchmark_case.timed_iterations;
+         ++iteration) {
+        operation(
+            sendBuffer
+    .data(),
+            receiveBuffer.data(),
+            benchmark_case.elementCount,
+            context
+        );
+    }
+
+    const double local_elapsed = MPI_Wtime() - start_time;
+    double maximum_elapsed = 0.0;
+    MPI_Reduce(
+        &local_elapsed,
+        &maximum_elapsed,
+        1,
+        MPI_DOUBLE,
+        MPI_MAX,
+        0,
+        context.world
+    );
+
+    const int local_is_correct = has_expected_result(
+        receiveBuffer,
+        expected_sum
+    ) ? 1 : 0;
+    int globally_correct = 0;
+    MPI_Allreduce(
+        &local_is_correct,
+        &globally_correct,
+        1,
+        MPI_INT,
+        MPI_LAND,
+        context.world
+    );
+
+    const double average_microseconds = maximum_elapsed /
+        benchmark_case.timed_iterations * kMicrosecondsPerSecond;
+    return {average_microseconds, globally_correct != 0};
+}
+
+/* Prints spreadsheet column names from rank zero */
+static void printCSVHeader() {
+    printf(
+        "run,payload,elements,payloadBytes,iterations,mpi_us_op,"
+        "custom_us_op,slowdown,mpiCorrect,customCorrect,worldRanks,"
+        "nodeCount\n"
+    );
+}
+
+/* Prints one spreadsheet-compatible benchmark row from rank zero */
+static void print_csv_row(
+    int run_number,
+    const BenchmarkCase& benchmarkCase,
+    const Measurement& mpiMeasurement,
+    const Measurement& customMeasurement,
+    int worldSize,
+    int nodeCount
+) {
+    const double slowdown = mpiMeasurement.averageMicroseconds > 0.0
+        ? customMeasurement.averageMicroseconds /
+            mpiMeasurement.averageMicroseconds
+        : 0.0;
+
+    const long long payloadBytes = static_cast<long long>(
+        benchmarkCase.elementCount
+    ) * sizeof(int);
+
+    printf(
+        "%d,%s,%d,%lld,%d,%.6f,%.6f,%.6f,%d,%d,%d,%d\n",
+        run_number,
+        benchmarkCase.label,
+        benchmarkCase.elementCount,
+        payloadBytes,
+        benchmarkCase.timedIterations,
+        mpiMeasurement.averageMicroseconds,
+        custom_measurement.averageMicroseconds,
+        slowdown,
+        mpi_measurement.isCorrect ? 1 : 0,
+        custom_measurement.isCorrect ? 1 : 0,
+        world_size,
+        node_count
+    );
 }
 
 int main(int argc, char** argv) {
+    // Begin MPI 
     MPI_Init(&argc, &argv);
 
-    int world_rank = -1, world_size = -1;
+    int world_rank = -1;
+    int world_size = -1;
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
-    Comms c;
-    int rc = buildComms(MPI_COMM_WORLD, &c);
+    // Set up communication 
+    Comms comms;
+    const int build_result = build_comms(MPI_COMM_WORLD, &comms);
 
-    int node_rank = -1, node_size = -1;
-    MPI_Comm_rank(c.nodeComm, &node_rank);
-    MPI_Comm_size(c.nodeComm, &node_size);
+    if (build_result != MPI_SUCCESS) {
+        if (world_rank == 0) {
+            fprintf(stderr, "Could not build node-aware communicators\n");
+        }
 
-    // sum of (rank + 1)
-    int x = world_rank + 1;
-    int y = 0;
+        MPI_Abort(MPI_COMM_WORLD, build_result);
+    }
 
-    rc = hAllReduce(
-        &x,
-        &y,
-        1,
-        MPI_INT,
-        MPI_SUM,
-        MPI_COMM_WORLD,
-        c.nodeComm,
-        c.leaderComm
-    );
+    // Set up context 
+    BenchmarkContext context;
+    context.world = MPI_COMM_WORLD;
+    context.node_comm = comms.node_comm;
+    context.leader_comm = comms.leader_comm;
 
-    cout << "WorldRank = " << world_rank << "/" << world_size
-              << " NodeRank = " << node_rank << "/" << node_size
-              << " Result = " << y << endl;
+    int node_count = 0;
 
-    freeComms(&c);
+    if (world_rank == 0) {
+        MPI_Comm_size(context.leader_comm, &node_count);
+    }
+
+    const int expected_sum = world_size * (world_size + 1) / 2;
+
+    if (world_rank == 0) {
+        printCSVHeader();
+    }
+
+    for (int run_number = 1;
+         run_number <= kBenchmarkRuns;
+         ++run_number) {
+        for (const BenchmarkCase& benchmark_case : kBenchmarkCases) {
+            const Measurement mpi_measurement = measure_operation(
+                mpi_all_reduce,
+                benchmark_case,
+                context,
+                world_rank + 1,
+                expected_sum
+            );
+            const Measurement custom_measurement = measure_operation(
+                hierarchical_all_reduce,
+                benchmark_case,
+                context,
+                world_rank + 1,
+                expected_sum
+            );
+
+            if (world_rank == 0) {
+                print_csv_row(
+                    run_number,
+                    benchmark_case,
+                    mpi_measurement,
+                    custom_measurement,
+                    world_size,
+                    node_count
+                );
+            }
+        }
+    }
+
+    free_comms(&comms);
     MPI_Finalize();
     return 0;
 }

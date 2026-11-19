@@ -1,6 +1,9 @@
 .vs/
 bin/
 obj/
+organizedData/
 *.user
 *.suo
 *.cache
+MPIproj.pdf
+.clangd
