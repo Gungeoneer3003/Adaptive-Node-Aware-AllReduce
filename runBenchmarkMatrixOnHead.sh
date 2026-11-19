@@ -58,6 +58,7 @@ if [ "$(hostname -s)" != "head" ]; then
 fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+data_dir="$script_dir/data"
 config_file="$script_dir/$CONFIG_FILE_NAME"
 runner_file="$script_dir/$RUNNER_FILE_NAME"
 requested_labels=("$@")
@@ -77,7 +78,9 @@ for index in "${!requested_labels[@]}"; do
     found_labels[index]=0
 done
 
-log_file="$script_dir/benchmarkMatrix-$(date +%Y%m%d-%H%M%S).log"
+# Keep generated matrix logs beside the benchmark CSV result files
+mkdir -p "$data_dir"
+log_file="$data_dir/benchmarkMatrix-$(date +%Y%m%d-%H%M%S).log"
 printf 'Benchmark matrix started: %s\n' "$(date --iso-8601=seconds)" \
     | tee "$log_file"
 printf 'Configuration file: %s\n' "$config_file" | tee -a "$log_file"

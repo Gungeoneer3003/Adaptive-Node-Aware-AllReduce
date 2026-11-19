@@ -80,12 +80,16 @@ ranks_per_node="$2"
 minimum_elements="${3:-$MIN_ELEMENTS}"
 maximum_elements="${4:-$MAX_ELEMENTS}"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+data_dir="$script_dir/data"
 submit_script="$script_dir/submitNxMAllreduce.sh"
 
 if [ ! -x "$submit_script" ]; then
     printf 'Missing executable submit script: %s\n' "$submit_script" >&2
     exit 1
 fi
+
+# Keep generated benchmark results outside the source-file root directory
+mkdir -p "$data_dir"
 
 submit_output="$("$submit_script" \
     "$node_count" \
@@ -119,7 +123,7 @@ batch_host="$(get_job_field "$job_id" "BatchHost")"
 output_path="/tmp/nxm-allreduce-$job_id.out"
 error_path="/tmp/nxm-allreduce-$job_id.err"
 output_prefix="nodes${node_count}ranks${ranks_per_node}Allreduce-$job_id"
-csv_path="$script_dir/$output_prefix.csv"
+csv_path="$data_dir/$output_prefix.csv"
 expected_rows=$((
     ((maximum_elements - minimum_elements) / ELEMENT_STEP + 1) * 100
 ))
