@@ -118,9 +118,10 @@ while read -r label node_count ranks_per_node node_list extra; do
 
     if [ -n "${node_list:-}" ] && [ "$node_list" != "-" ]; then
         NXM_NODELIST="$node_list" "$runner_file" \
-            "$node_count" "$ranks_per_node" 2>&1 | tee -a "$log_file"
+            "$node_count" "$ranks_per_node" </dev/null 2>&1 \
+            | tee -a "$log_file"
     else
-        "$runner_file" "$node_count" "$ranks_per_node" 2>&1 \
+        "$runner_file" "$node_count" "$ranks_per_node" </dev/null 2>&1 \
             | tee -a "$log_file"
     fi
 
