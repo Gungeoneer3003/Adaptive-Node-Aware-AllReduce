@@ -1,0 +1,46 @@
+Benchmark matrix started: 2026-11-18T19:35:11-08:00
+Configuration file: /home/beowulf/Projects/cluster/Adaptive-Node-Aware-AllReduce/benchmarkMatrix.conf
+
+== Starting 4x2 at 2026-11-18T19:35:11-08:00 ==
+nodes=4 ranksPerNode=2 nodeList=random compute nodes
+Submitted job 597 for 4 nodes and 2 ranks per node
+Node selection: random compute nodes
+Requested nodes: node14,node00,node03,node12
+Staged executable for job 597
+Batch host: node00
+Monitor: squeue -j 597
+Output: /tmp/nxm-allreduce-597.out on node00
+Waiting for job 597 to complete
+Collected and validated 15000 rows
+CSV: /home/beowulf/Projects/cluster/Adaptive-Node-Aware-AllReduce/data/nodes4ranks2Allreduce-597.csv
+== Completed 4x2 at 2026-11-18T19:38:25-08:00 ==
+
+== Starting 8x2 at 2026-11-18T19:38:25-08:00 ==
+nodes=8 ranksPerNode=2 nodeList=random compute nodes
+Submitted job 598 for 8 nodes and 2 ranks per node
+Node selection: random compute nodes
+Requested nodes: node11,node02,node01,node06,node14,node07,node10,node13
+Staged executable for job 598
+Batch host: node01
+Monitor: squeue -j 598
+Output: /tmp/nxm-allreduce-598.out on node01
+Waiting for job 598 to complete
+Collected and validated 15000 rows
+CSV: /home/beowulf/Projects/cluster/Adaptive-Node-Aware-AllReduce/data/nodes8ranks2Allreduce-598.csv
+== Completed 8x2 at 2026-11-18T19:40:18-08:00 ==
+
+== Starting 16x2 at 2026-11-18T19:40:18-08:00 ==
+nodes=16 ranksPerNode=2 nodeList=all cluster nodes
+Submitted job 599 for 16 nodes and 2 ranks per node
+Node selection: all nodes
+Requested nodes: head,node[00-14]
+Staged executable for job 599
+Batch host: head
+Monitor: squeue -j 599
+Output: /tmp/nxm-allreduce-599.out on head
+Waiting for job 599 to complete
+Collected and validated 15000 rows
+CSV: /home/beowulf/Projects/cluster/Adaptive-Node-Aware-AllReduce/data/nodes16ranks2Allreduce-599.csv
+== Completed 16x2 at 2026-11-18T19:44:05-08:00 ==
+
+Benchmark matrix completed: 2026-11-18T19:44:05-08:00
