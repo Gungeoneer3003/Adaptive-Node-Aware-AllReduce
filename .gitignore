@@ -2,6 +2,7 @@
 bin/
 obj/
 organizedData/
+rangeAllreduce
 *.user
 *.suo
 *.cache

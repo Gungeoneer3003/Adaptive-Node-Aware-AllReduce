@@ -1,0 +1,18 @@
+Benchmark matrix started: 2026-11-18T19:15:10-08:00
+Configuration file: /home/beowulf/Projects/cluster/Adaptive-Node-Aware-AllReduce/benchmarkMatrix.conf
+
+== Starting 2x2 at 2026-11-18T19:15:10-08:00 ==
+nodes=2 ranksPerNode=2 nodeList=random compute nodes
+Submitted job 596 for 2 nodes and 2 ranks per node
+Node selection: random compute nodes
+Requested nodes: node06,node05
+Staged executable for job 596
+Batch host: node05
+Monitor: squeue -j 596
+Output: /tmp/nxm-allreduce-596.out on node05
+Waiting for job 596 to complete
+Collected and validated 15000 rows
+CSV: /home/beowulf/Projects/cluster/Adaptive-Node-Aware-AllReduce/data/nodes2ranks2Allreduce-596.csv
+== Completed 2x2 at 2026-11-18T19:16:28-08:00 ==
+
+Benchmark matrix completed: 2026-11-18T19:16:28-08:00
